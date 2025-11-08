@@ -19,7 +19,9 @@ void Sphere::generateGeometry() {
             float x = m_radius * sinf(phi) * cosf(theta);
             float y = m_radius * cosf(phi);
             float z = m_radius * sinf(phi) * sinf(theta);
-            m_vertices.append(QVector3D(x, y, z));
+
+            // FIX: Use m_geometryVertices for QVector3D data
+            m_geometryVertices.append(QVector3D(x, y, z));
         }
     }
 
