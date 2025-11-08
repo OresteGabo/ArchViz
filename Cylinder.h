@@ -11,7 +11,7 @@
 class Cylinder : public Shape {
 public:
     Cylinder(float radius = 1.0f, float height = 2.0f, int segments = 32);
-    void generateGeometry();
+    void generateGeometry()override;
 private:
     float m_radius, m_height;
     int m_segments;
