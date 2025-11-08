@@ -10,11 +10,12 @@
 #pragma once
 #include "Shape.h"
 #include <QList>
-
+#include <QMatrix4x4>
+#include <QOpenGLShaderProgram>
 class CompositeObject {
 public:
     void addShape(Shape* shape, const QMatrix4x4 &transform);
-    void draw(QOpenGLShaderProgram *program, const QMatrix4x4 &baseMatrix);
+    void draw(QOpenGLShaderProgram *program, QMatrix4x4 baseMatrix);
 private:
     struct Entry { Shape* shape; QMatrix4x4 transform; };
     QList<Entry> m_shapes;
