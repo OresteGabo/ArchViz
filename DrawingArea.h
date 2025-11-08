@@ -22,6 +22,7 @@ public:
     explicit DrawingArea(QWidget *parent = nullptr);
     ~DrawingArea() override;
 
+
 protected:
     // Qt OpenGL lifecycle
     void initializeGL() override;
@@ -41,6 +42,7 @@ private:
     void drawAxes();
     void drawCube();
     void ensureCubeInitialized();
+    void drawShapes();
 
 private:
     QOpenGLShaderProgram m_program;
@@ -56,8 +58,7 @@ private:
     float m_rotationY = -30.0f;
     float m_zoomDistance = -200.0f;
 
-    Cube *m_testCube = nullptr;
-    //CompositeObject* m_scene = nullptr;
+    QVector<Shape*> m_shapes;
 
     QOpenGLDebugLogger *m_logger = nullptr;
 };
