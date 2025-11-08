@@ -11,7 +11,7 @@
 class Pyramid : public Shape {
 public:
     Pyramid(float base = 1.0f, float height = 1.0f);
-    void generateGeometry();
+    void generateGeometry()override;
 private:
     float m_base, m_height;
 };
