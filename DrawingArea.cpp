@@ -4,7 +4,10 @@
 #include <QOpenGLVertexArrayObject>
 #include <QVector4D>
 #include <QDebug>
-
+#include "Shape.h"
+#include "Pyramid.h"
+#include "Cube.h"
+#include "Sphere.h"
 // Simple shaders (position + uniform color)
 static const char *vertexShaderSource =
     "attribute vec3 position;\n"
@@ -27,19 +30,13 @@ DrawingArea::DrawingArea(QWidget *parent)
 
 DrawingArea::~DrawingArea()
 {
-    // Must make the context current before destroying GL resources
     makeCurrent();
 
-    if (m_testCube) {
-        delete m_testCube;
-        m_testCube = nullptr;
-    }
+    // Delete all shapes
+    qDeleteAll(m_shapes);
+    m_shapes.clear();
 
-    if (m_logger) {
-        delete m_logger;
-        m_logger = nullptr;
-    }
-
+    if (m_logger) delete m_logger;
     doneCurrent();
 }
 
@@ -65,9 +62,27 @@ void DrawingArea::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_PROGRAM_POINT_SIZE);
 
-    // create test cube object and initialize its GL buffers (context is current)
-    m_testCube = new Cube(QVector3D(0.0f, 10.0f, 0.0f), 20.0f);
-    m_testCube->init(); // safe: current context
+    // 3. Create and Initialize ALL shapes (Context is current)
+
+    // 3.1. Create the Cube
+    Cube *cube = new Cube(QVector3D(30.0f, 10.0f, 0.0f), 20.0f);
+    cube->setColor(QVector4D(1.0f, 0.85f, 0.0f, 1.0f)); // yellow
+    cube->init();
+    m_shapes.append(cube);
+
+    // 3.2. Create a Sphere
+    Shape *sphere = new Sphere(15.0f, 32, 16);
+    sphere->setPosition(QVector3D(-30.0f, 15.0f, 0.0f));
+    sphere->setColor(QVector4D(0.0f, 0.5f, 1.0f, 1.0f)); // blue
+    sphere->init();
+    m_shapes.append(sphere);
+
+    // 3.3. Create a Pyramid
+    Pyramid *pyramid = new Pyramid(20.0f, 30.0f);
+    pyramid->setPosition(QVector3D(0.0f, 15.0f, 30.0f));
+    pyramid->setColor(QVector4D(0.8f, 0.2f, 0.8f, 1.0f)); // magenta
+    pyramid->init();
+    m_shapes.append(pyramid);
 }
 
 void DrawingArea::initializeShaders()
@@ -124,7 +139,7 @@ void DrawingArea::paintGL()
     // draw grid, axes and cube
     drawGrid();
     drawAxes();
-    drawCube();
+    drawShapes();
 }
 
 void DrawingArea::drawGrid()
@@ -208,37 +223,29 @@ void DrawingArea::drawAxes()
     m_program.release();
 }
 
-void DrawingArea::ensureCubeInitialized()
+void DrawingArea::drawShapes()
 {
-    if (!m_testCube) {
-        m_testCube = new Cube(QVector3D(0.0f, 10.0f, 0.0f), 20.0f);
-        m_testCube->init();
-    }
-}
-
-void DrawingArea::drawCube()
-{
-    ensureCubeInitialized();
-
-    if (!m_testCube) return;
-
     m_program.bind();
-    // combined P*V
     QMatrix4x4 combinedPV = m_projection * m_view;
 
-    // model matrix for cube
-    QMatrix4x4 model;
-    model.translate(m_testCube->getPosition());
-    QMatrix4x4 finalMatrix = combinedPV * model;
+    for (Shape *shape : m_shapes) {
+        if (!shape) continue;
 
-    m_program.setUniformValue(m_matrixUniform, finalMatrix);
-    m_program.setUniformValue(m_colorUniform, QVector4D(1.0f, 0.85f, 0.0f, 1.0f)); // yellow
+        // 1. Calculate Model Matrix (Translation only for now)
+        QMatrix4x4 model;
+        model.translate(shape->getPosition());
+        QMatrix4x4 finalMatrix = combinedPV * model;
 
-    // Cube::draw assumes program is bound and VAO ready
-    m_testCube->draw(&m_program);
+        // 2. Set uniforms
+        m_program.setUniformValue(m_matrixUniform, finalMatrix);
+        m_program.setUniformValue(m_colorUniform, shape->getColor());
 
+        // 3. Draw
+        shape->drawGeometry();
+    }
     m_program.release();
 }
+
 
 // ---------- Input ----------
 
