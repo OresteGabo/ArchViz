@@ -12,7 +12,7 @@
 class Sphere : public Shape {
 public:
     Sphere(float radius = 1.0f, int slices = 32, int stacks = 16);
-    void generateGeometry();
+    void generateGeometry() override;
 private:
     float m_radius;
     int m_slices, m_stacks;
