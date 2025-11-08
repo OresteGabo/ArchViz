@@ -19,8 +19,10 @@ void Cylinder::generateGeometry() {
         float theta = (2 * M_PI * i) / m_segments;
         float x = m_radius * cosf(theta);
         float z = m_radius * sinf(theta);
-        m_vertices.append(QVector3D(x, halfH, z));   // top
-        m_vertices.append(QVector3D(x, -halfH, z));  // bottom
+
+        // FIX: Use m_geometryVertices for QVector3D data
+        m_geometryVertices.append(QVector3D(x, halfH, z));   // top
+        m_geometryVertices.append(QVector3D(x, -halfH, z));  // bottom
     }
 
     // Side faces
