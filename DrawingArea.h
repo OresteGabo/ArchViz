@@ -49,6 +49,7 @@ private:
     int m_posAttr = 0;
     int m_matrixUniform = -1;
     int m_colorUniform = -1;
+    int m_normalAttr = 1;
 
     QMatrix4x4 m_projection;
     QMatrix4x4 m_view;
@@ -61,6 +62,25 @@ private:
     QVector<Shape*> m_shapes;
 
     QOpenGLDebugLogger *m_logger = nullptr;
+    QOpenGLBuffer m_gridVbo;
+    int m_modelMatrixUniform = -1;
+    int m_viewMatrixUniform = -1;
+    int m_projectionMatrixUniform = -1;
+
+    // Lighting uniforms
+    int m_lightPosUniform = -1;
+    int m_viewPosUniform = -1;
+    int m_objectColorUniform = -1;
+
+    // Lighting properties (constants for the scene)
+    QVector3D m_lightPosition = QVector3D(100.0f, 200.0f, 100.0f); // Overhead light
+    QVector3D m_viewPosition; // Camera position (calculated in paintGL)
+
+    // Material/Lighting constants
+    const QVector3D m_ambientColor = QVector3D(0.2f, 0.2f, 0.2f);
+    const QVector3D m_diffuseColor = QVector3D(0.7f, 0.7f, 0.7f);
+    const QVector3D m_specularColor = QVector3D(1.0f, 1.0f, 1.0f);
+    const float m_shininess = 32.0f; // Specular exponent
 };
 
 

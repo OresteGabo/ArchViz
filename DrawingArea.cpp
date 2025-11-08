@@ -11,15 +11,58 @@
 // Simple shaders (position + uniform color)
 static const char *vertexShaderSource =
     "attribute vec3 position;\n"
-    "uniform mat4 matrix;\n"
+    "attribute vec3 normal;\n"
+    "uniform mat4 modelMatrix;\n"
+    "uniform mat4 viewMatrix;\n"
+    "uniform mat4 projectionMatrix;\n"
+    "varying vec3 FragPos;\n"
+    "varying vec3 Normal;\n"
     "void main() {\n"
-    "  gl_Position = matrix * vec4(position, 1.0);\n"
-    "}\n";
+    "  FragPos = vec3(modelMatrix * vec4(position, 1.0));\n"
 
+    // FIX for GLSL 1.10: Manually extract the 3x3 matrix components for the Normal transform
+    "  mat3 normalMatrix = mat3(\n"
+    "    modelMatrix[0].xyz, \n"
+    "    modelMatrix[1].xyz, \n"
+    "    modelMatrix[2].xyz\n"
+    "  );\n"
+    "  Normal = normalMatrix * normal;\n"
+
+    "  gl_Position = projectionMatrix * viewMatrix * vec4(FragPos, 1.0);\n"
+    "}\n";
 static const char *fragmentShaderSource =
-    "uniform vec4 color;\n"
+    "uniform vec3 lightPos;\n"
+    "uniform vec3 viewPos;\n"
+    "uniform vec4 objectColor;\n"
+
+    // Lighting components
+    "uniform vec3 ambientColor;\n"
+    "uniform vec3 diffuseColor;\n"
+    "uniform vec3 specularColor;\n"
+    "uniform float shininess;\n" // Specular exponent
+
+    "varying vec3 FragPos;\n"
+    "varying vec3 Normal;\n"
+
     "void main() {\n"
-    "  gl_FragColor = color;\n"
+    // --- 1. Ambient component ---
+    "  vec3 ambient = ambientColor * vec3(objectColor);\n"
+
+    // --- 2. Diffuse component ---
+    "  vec3 norm = normalize(Normal);\n"
+    "  vec3 lightDir = normalize(lightPos - FragPos);\n"
+    "  float diff = max(dot(norm, lightDir), 0.0);\n"
+    "  vec3 diffuse = diffuseColor * diff * vec3(objectColor);\n"
+
+    // --- 3. Specular component ---
+    "  vec3 viewDir = normalize(viewPos - FragPos);\n"
+    "  vec3 reflectDir = reflect(-lightDir, norm);\n"
+    "  float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);\n"
+    "  vec3 specular = specularColor * spec;\n"
+
+    // --- Final color ---
+    "  vec3 result = ambient + diffuse + specular;\n"
+    "  gl_FragColor = vec4(result, objectColor.a);\n"
     "}\n";
 
 DrawingArea::DrawingArea(QWidget *parent)
@@ -28,6 +71,38 @@ DrawingArea::DrawingArea(QWidget *parent)
     setMouseTracking(true);
 }
 
+// DrawingArea.cpp
+
+// ... (other DrawingArea functions)
+
+void DrawingArea::paintGL()
+{
+    if (!m_program.isLinked()) {
+        // shaders not ready
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        return;
+    }
+
+    // Camera/View matrix setup
+    m_view.setToIdentity();
+    m_view.translate(0.0f, 0.0f, m_zoomDistance);
+    m_view.rotate(m_rotationX, 1.0f, 0.0f, 0.0f);
+    m_view.rotate(m_rotationY, 0.0f, 1.0f, 0.0f);
+
+    // CRITICAL: Calculate Camera/View Position (Inverse of View Matrix translation)
+    QMatrix4x4 viewInverse = m_view.inverted();
+    m_viewPosition = viewInverse.column(3).toVector3D();
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    // Draw the scene elements
+    drawGrid();
+    drawAxes();
+    drawShapes();
+}
+
+// ... (rest of DrawingArea functions)
 DrawingArea::~DrawingArea()
 {
     makeCurrent();
@@ -97,18 +172,35 @@ void DrawingArea::initializeShaders()
         return;
     }
 
-    // Bind attribute location for "position" to 0 so VAO in Cube can rely on 0
+    // Bind attribute locations (MUST match gl_Position and Normal buffer order)
     m_program.bindAttributeLocation("position", 0);
+    m_program.bindAttributeLocation("normal", 1); // NEW: Bind normal attribute to location 1
 
     if (!m_program.link()) {
         qCritical() << "Shader link error:" << m_program.log();
         return;
     }
 
-    // Cache locations
-    m_posAttr = m_program.attributeLocation("position"); // should be 0
-    m_matrixUniform = m_program.uniformLocation("matrix");
-    m_colorUniform = m_program.uniformLocation("color");
+    // Cache NEW matrix locations
+    m_posAttr = m_program.attributeLocation("position");
+    m_normalAttr = m_program.attributeLocation("normal");
+
+    m_modelMatrixUniform = m_program.uniformLocation("modelMatrix");
+    m_viewMatrixUniform = m_program.uniformLocation("viewMatrix");
+    m_projectionMatrixUniform = m_program.uniformLocation("projectionMatrix");
+    m_objectColorUniform = m_program.uniformLocation("objectColor");
+
+    // Cache lighting uniforms
+    m_lightPosUniform = m_program.uniformLocation("lightPos");
+    m_viewPosUniform = m_program.uniformLocation("viewPos");
+
+    // Set fixed lighting uniforms once (Ambient, Diffuse, Specular properties)
+    m_program.bind();
+    m_program.setUniformValue(m_program.uniformLocation("ambientColor"), m_ambientColor);
+    m_program.setUniformValue(m_program.uniformLocation("diffuseColor"), m_diffuseColor);
+    m_program.setUniformValue(m_program.uniformLocation("specularColor"), m_specularColor);
+    m_program.setUniformValue(m_program.uniformLocation("shininess"), m_shininess);
+    m_program.release();
 }
 
 void DrawingArea::resizeGL(int w, int h)
@@ -119,70 +211,73 @@ void DrawingArea::resizeGL(int w, int h)
     m_projection.perspective(45.0f, float(w) / float(h), 0.1f, 2000.0f);
 }
 
-void DrawingArea::paintGL()
-{
-    if (!m_program.isLinked()) {
-        // shaders not ready
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        return;
-    }
 
-    // camera/view matrix
-    m_view.setToIdentity();
-    m_view.translate(0.0f, 0.0f, m_zoomDistance);
-    m_view.rotate(m_rotationX, 1.0f, 0.0f, 0.0f);
-    m_view.rotate(m_rotationY, 0.0f, 1.0f, 0.0f);
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
-
-    // draw grid, axes and cube
-    drawGrid();
-    drawAxes();
-    drawShapes();
-}
+// DrawingArea.cpp
 
 void DrawingArea::drawGrid()
 {
-    // grid parameters
-    QVector<QVector3D> gridData;
-    const int GRID_COUNT = 40;          // number of lines each side
-    const float GRID_SPACING = 10.0f;
-    const float HALF_EXTENT = (GRID_COUNT / 2.0f) * GRID_SPACING;
-    const float Y_OFFSET = 0.001f;      // avoid z-fight
-
-    for (int i = -GRID_COUNT/2; i <= GRID_COUNT/2; ++i) {
-        float x = i * GRID_SPACING;
-        gridData.append(QVector3D(x, Y_OFFSET, -HALF_EXTENT));
-        gridData.append(QVector3D(x, Y_OFFSET, HALF_EXTENT));
-    }
-    for (int i = -GRID_COUNT/2; i <= GRID_COUNT/2; ++i) {
-        float z = i * GRID_SPACING;
-        gridData.append(QVector3D(-HALF_EXTENT, Y_OFFSET, z));
-        gridData.append(QVector3D(HALF_EXTENT, Y_OFFSET, z));
-    }
-
-    // create VBO on the fly (fast enough for small grid)
-    QOpenGLBuffer gridVbo(QOpenGLBuffer::VertexBuffer);
-    gridVbo.create();
-    gridVbo.bind();
-    gridVbo.allocate(gridData.constData(), gridData.size() * sizeof(QVector3D));
+    // The grid is centered at the origin (0, 0, 0) in world space, so its model matrix is identity.
+    QMatrix4x4 model;
+    model.setToIdentity();
 
     m_program.bind();
-    QMatrix4x4 combined = m_projection * m_view;
-    m_program.setUniformValue(m_matrixUniform, combined);
 
+    // 1. Set NEW Matrix Uniforms for the current shader
+    m_program.setUniformValue(m_projectionMatrixUniform, m_projection);
+    m_program.setUniformValue(m_viewMatrixUniform, m_view);
+    m_program.setUniformValue(m_modelMatrixUniform, model);
+
+    // 2. Set the Color Uniform
+    // This color will be affected by ambient light, but it should be visible.
+    QVector4D gridColor(0.32f, 0.32f, 0.36f, 1.0f);
+    m_program.setUniformValue(m_objectColorUniform, gridColor);
+
+    // Grid parameters
+    const int gridSize = 20;
+    const int numLines = gridSize * 2 + 1;
+    const float lineSpacing = 1.0f;
+
+    // Create line data
+    QVector<float> gridData;
+    float start = -gridSize * lineSpacing;
+    float end = gridSize * lineSpacing;
+    float yOffset = 0.001f; // Slightly above the origin to prevent Z-fighting with the base plane
+
+    for (int i = 0; i < numLines; ++i) {
+        float pos = start + i * lineSpacing;
+
+        // Vertical lines (along X-axis)
+        gridData.append(pos); gridData.append(yOffset); gridData.append(start);
+        gridData.append(pos); gridData.append(yOffset); gridData.append(end);
+
+        // Horizontal lines (along Z-axis)
+        gridData.append(start); gridData.append(yOffset); gridData.append(pos);
+        gridData.append(end); gridData.append(yOffset); gridData.append(pos);
+    }
+
+    // VBO setup
+    if (!m_gridVbo.isCreated()) {
+        m_gridVbo.create();
+    }
+    m_gridVbo.bind();
+    m_gridVbo.allocate(gridData.constData(), gridData.size() * sizeof(float));
+
+    // 3. Configure Attributes
+    // CRITICAL: ONLY enable the position attribute (Location 0).
+    // The normal attribute (Location 1) MUST be left disabled so the shader doesn't try to read it.
+
+    // Enable Position Attribute (Location 0)
     m_program.enableAttributeArray(m_posAttr);
+    // Attribute pointer: (Location, Size=3, Type=float, Normalized=False, Stride=0, Offset=0)
     m_program.setAttributeBuffer(m_posAttr, GL_FLOAT, 0, 3, 0);
 
-    glLineWidth(1.0f);
-    // grid color
-    m_program.setUniformValue(m_colorUniform, QVector4D(0.32f, 0.32f, 0.36f, 1.0f));
-    glDrawArrays(GL_LINES, 0, gridData.size());
+    // Draw the grid lines
+    glDrawArrays(GL_LINES, 0, gridData.size() / 3);
 
+    // 4. Cleanup
     m_program.disableAttributeArray(m_posAttr);
-    gridVbo.release();
-    gridVbo.destroy();
+    m_gridVbo.release();
     m_program.release();
 }
 
@@ -223,22 +318,30 @@ void DrawingArea::drawAxes()
     m_program.release();
 }
 
+// DrawingArea.cpp (Modified drawShapes)
+
 void DrawingArea::drawShapes()
 {
     m_program.bind();
-    QMatrix4x4 combinedPV = m_projection * m_view;
+
+    // Set PROJECTION and VIEW matrix UNIFORMS (once per frame)
+    m_program.setUniformValue(m_projectionMatrixUniform, m_projection);
+    m_program.setUniformValue(m_viewMatrixUniform, m_view);
+
+    // Set Light and View positions (once per frame)
+    m_program.setUniformValue(m_lightPosUniform, m_lightPosition);
+    m_program.setUniformValue(m_viewPosUniform, m_viewPosition);
 
     for (Shape *shape : m_shapes) {
         if (!shape) continue;
 
-        // 1. Calculate Model Matrix (Translation only for now)
+        // 1. Calculate Model Matrix
         QMatrix4x4 model;
         model.translate(shape->getPosition());
-        QMatrix4x4 finalMatrix = combinedPV * model;
 
-        // 2. Set uniforms
-        m_program.setUniformValue(m_matrixUniform, finalMatrix);
-        m_program.setUniformValue(m_colorUniform, shape->getColor());
+        // 2. Set uniforms specific to this shape (Model matrix & Color)
+        m_program.setUniformValue(m_modelMatrixUniform, model);
+        m_program.setUniformValue(m_objectColorUniform, shape->getColor());
 
         // 3. Draw
         shape->drawGeometry();

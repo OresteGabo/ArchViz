@@ -11,7 +11,14 @@ Sphere::Sphere(float radius, int slices, int stacks)
     init();
 }
 
+// Sphere.cpp (Modified generateGeometry)
 void Sphere::generateGeometry() {
+    m_geometryVertices.clear();
+    m_geometryNormals.clear();
+    m_indices.clear();
+
+    // ... (Stack/Slice calculation code remains the same) ...
+
     for (int i = 0; i <= m_stacks; ++i) {
         float phi = M_PI * i / m_stacks;
         for (int j = 0; j <= m_slices; ++j) {
@@ -20,11 +27,15 @@ void Sphere::generateGeometry() {
             float y = m_radius * cosf(phi);
             float z = m_radius * sinf(phi) * sinf(theta);
 
-            // FIX: Use m_geometryVertices for QVector3D data
-            m_geometryVertices.append(QVector3D(x, y, z));
+            QVector3D vertex = QVector3D(x, y, z);
+
+            // Sphere Normal: Normalized position vector (since it's a smooth surface)
+            m_geometryVertices.append(vertex);
+            m_geometryNormals.append(vertex.normalized()); // Normal is just the normalized position
         }
     }
 
+    // ... (Index calculation code remains the same) ...
     for (int i = 0; i < m_stacks; ++i) {
         for (int j = 0; j < m_slices; ++j) {
             int first = i * (m_slices + 1) + j;

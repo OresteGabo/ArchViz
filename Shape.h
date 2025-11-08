@@ -48,6 +48,7 @@ protected:
     QVector<QVector3D> m_geometryVertices; // Geometry data container (temporary)
     QVector<float> m_vertices;             // Final interleaved buffer data
     QVector<GLuint> m_indices;             // Index data
+    QVector<QVector3D> m_geometryNormals;  // NEW: Store normals here
 };
 
 #endif // ARCHIVIZ_SHAPE_H

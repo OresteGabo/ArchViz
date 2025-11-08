@@ -23,40 +23,55 @@ Shape::~Shape()
 
 void Shape::init()
 {
-    // CRITICAL: Initialize GL functions
     initializeOpenGLFunctions();
 
-    // 1. Convert m_geometryVertices to interleaved buffer data (m_vertices)
-    m_vertices.clear();
-    for (const auto &v : m_geometryVertices) {
-        m_vertices.append(v.x());
-        m_vertices.append(v.y());
-        m_vertices.append(v.z());
+    if (m_geometryVertices.isEmpty() || m_indices.isEmpty() || m_geometryNormals.isEmpty()) {
+        qWarning() << "Shape::init() - Missing geometry or normals!";
+        return;
     }
 
-    if (m_vertices.isEmpty() || m_indices.isEmpty()) {
-        qWarning() << "Shape::init() - No geometry to initialize!";
-        return;
+    // 1. Interleave Position (3 floats) and Normal (3 floats) data
+    m_vertices.clear();
+    for (int i = 0; i < m_geometryVertices.size(); ++i) {
+        // Position (Location 0)
+        m_vertices.append(m_geometryVertices[i].x());
+        m_vertices.append(m_geometryVertices[i].y());
+        m_vertices.append(m_geometryVertices[i].z());
+
+        // Normal (Location 1)
+        m_vertices.append(m_geometryNormals[i].x());
+        m_vertices.append(m_geometryNormals[i].y());
+        m_vertices.append(m_geometryNormals[i].z());
     }
 
     // Create and bind VAO
     m_vao.create();
     m_vao.bind();
 
-    // VBO (Vertex Buffer Object)
+    // VBO (allocating interleaved data)
     m_vbo.create();
     m_vbo.bind();
     m_vbo.allocate(m_vertices.constData(), m_vertices.size() * sizeof(float));
 
-    // EBO (Element Buffer Object)
+    // EBO (Index data)
     m_ebo.create();
     m_ebo.bind();
     m_ebo.allocate(m_indices.constData(), m_indices.size() * sizeof(GLuint));
 
-    // Attribute 0 = position (3 floats per vertex)
+    // Calculate stride and offset
+    const int POSITION_COUNT = 3;
+    const int NORMAL_COUNT = 3;
+    const int STRIDE = (POSITION_COUNT + NORMAL_COUNT) * sizeof(float); // 6 * sizeof(float)
+
+    // Attribute 0 = Position
     glEnableVertexAttribArray(0);
-    // The stride is 3 * sizeof(float) because we only store x, y, z
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), reinterpret_cast<void*>(0));
+    // Location 0, 3 components, type FLOAT, Stride, Offset = 0
+    glVertexAttribPointer(0, POSITION_COUNT, GL_FLOAT, GL_FALSE, STRIDE, reinterpret_cast<void*>(0));
+
+    // Attribute 1 = Normal
+    glEnableVertexAttribArray(1);
+    // Location 1, 3 components, type FLOAT, Stride, Offset = 3*sizeof(float)
+    glVertexAttribPointer(1, NORMAL_COUNT, GL_FLOAT, GL_FALSE, STRIDE, reinterpret_cast<void*>(POSITION_COUNT * sizeof(float)));
 
     // unbind
     m_vao.release();
