@@ -1,0 +1,35 @@
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+
+# Fichiers de solution Visual Studio / Rider
+*.csproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.opendb
+*.VC.db
+
+# Fichiers OS
+.DS_Store
+Thumbs.db
+
+# Unity WebGL
+[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Crash reports
+sysinfo.txt
+
+# Plugins Native (souvent volumineux et spécifiques à l'OS)
+/[Aa]ssets/Plugins/x86/
+/[Aa]ssets/Plugins/x86_64/
